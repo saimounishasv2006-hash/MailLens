@@ -1,0 +1,62 @@
+import { defineManifest } from "@crxjs/vite-plugin";
+
+export default defineManifest({
+  manifest_version: 3,
+  name: "MailLens — Smart Email Intelligence",
+  version: "1.0.0",
+  description:
+    "AI-powered email highlights, summaries, and insights — 100% local",
+  permissions: ["storage", "activeTab", "scripting", "sidePanel"],
+  host_permissions: [
+    "https://mail.google.com/*",
+    "https://outlook.live.com/*",
+    "https://outlook.office.com/*",
+    "https://mail.yahoo.com/*",
+    "https://mail.proton.me/*",
+    "https://app.fastmail.com/*",
+    "http://localhost:11434/*", // 👈 add this
+  ],
+  background: {
+    service_worker: "src/background/index.ts",
+    type: "module",
+  },
+  content_scripts: [
+    {
+      matches: [
+        "https://mail.google.com/*",
+        "https://outlook.live.com/*",
+        "https://outlook.office.com/*",
+        "https://mail.yahoo.com/*",
+        "https://mail.proton.me/*",
+        "https://app.fastmail.com/*",
+      ],
+      js: ["src/content/index.tsx"],
+      css: ["src/content/content.css"],
+      run_at: "document_idle",
+    },
+  ],
+  action: {
+    default_popup: "src/popup/index.html",
+    default_icon: {
+      "16": "public/icons/icon16.png",
+      "32": "public/icons/icon32.png",
+      "48": "public/icons/icon48.png",
+      "128": "public/icons/icon128.png",
+    },
+  },
+  side_panel: {
+    default_path: "src/sidebar/index.html",
+  },
+  icons: {
+    "16": "public/icons/icon16.png",
+    "32": "public/icons/icon32.png",
+    "48": "public/icons/icon48.png",
+    "128": "public/icons/icon128.png",
+  },
+  web_accessible_resources: [
+    {
+      resources: ["src/sidebar/index.html"],
+      matches: ["<all_urls>"],
+    },
+  ],
+});
