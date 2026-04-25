@@ -1,57 +1,61 @@
 import { detectEmailClient, getClientConfig } from "./detectors/clientDetector";
+import { parseEmail } from "./parsers/emailParser";
+import { extractHighlights } from "./parsers/nlpParser";
+import { injectHighlights } from "./highlighters/domHighlighter";
 import { EmailClient } from "@/types";
 
-console.log("[MailLens] Content script loaded");
+console.log("[MailLens] v2 loaded");
 
 let currentClient: EmailClient;
 let observer: MutationObserver | null = null;
+let lastProcessedText = "";
 
 function init() {
   currentClient = detectEmailClient();
   const config = getClientConfig(currentClient);
 
-  console.log(`[MailLens] Detected email client: ${currentClient}`);
-
-  // Watch for email open events via DOM mutation
   const observerTarget = document.querySelector(config.observerTarget);
   if (!observerTarget) {
-    // Retry after DOM loads more
     setTimeout(init, 1500);
     return;
   }
 
   observer = new MutationObserver(() => {
-    const emailBody = document.querySelector(config.bodySelector);
-    if (emailBody && !emailBody.getAttribute("data-maillens-processed")) {
-      emailBody.setAttribute("data-maillens-processed", "true");
-      onEmailOpened(emailBody as HTMLElement);
-    }
+    const emailBody = document.querySelector(
+      config.bodySelector,
+    ) as HTMLElement;
+    if (!emailBody) return;
+
+    const currentText = emailBody.innerText?.slice(0, 200) || "";
+    if (currentText === lastProcessedText) return; // already processed
+    lastProcessedText = currentText;
+
+    onEmailOpened(emailBody);
   });
 
-  observer.observe(observerTarget, {
-    childList: true,
-    subtree: true,
-  });
-
-  console.log("[MailLens] Observer active — waiting for emails");
+  observer.observe(observerTarget, { childList: true, subtree: true });
+  console.log(`[MailLens] Watching ${currentClient}`);
 }
 
-function onEmailOpened(emailElement: HTMLElement) {
-  console.log("[MailLens] Email opened, ready to analyze");
+async function onEmailOpened(emailElement: HTMLElement) {
+  const email = parseEmail(currentClient);
+  if (!email || email.body.length < 20) return;
 
-  // Phase 2: we'll add parsing + highlighting here
-  // For now just mark it
-  emailElement.style.outline = "2px solid rgba(99, 102, 241, 0.3)";
+  console.log("[MailLens] Parsed email:", email.subject);
 
-  // Notify background/sidebar
+  // Extract highlights with NLP
+  const highlights = extractHighlights(email);
+
+  // Inject into DOM
+  injectHighlights(emailElement, highlights);
+
+  // Notify sidebar
   chrome.runtime.sendMessage({
-    type: "EMAIL_OPENED",
-    payload: {
-      client: currentClient,
-      bodyText: emailElement.innerText?.slice(0, 5000), // cap at 5k chars
-    },
+    type: "EMAIL_ANALYZED",
+    payload: { email, highlights },
   });
+
+  console.log(`[MailLens] Injected ${highlights.length} highlights`);
 }
 
-// Kick off
 init();
