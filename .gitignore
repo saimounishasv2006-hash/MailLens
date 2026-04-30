@@ -6,6 +6,11 @@ node_modules/
 /.vite/
 *.tsbuildinfo
 
+# Extension packaging
+*.crx
+*.zip
+*.pem
+
 # Environment files
 .env
 .env.*

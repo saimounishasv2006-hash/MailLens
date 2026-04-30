@@ -1,7 +1,12 @@
 import { detectEmailClient, getClientConfig } from "./detectors/clientDetector";
-import { parseEmail } from "./parsers/emailParser";
+import { parseEmail, findEmailBody } from "./parsers/emailParser";
 import { extractHighlights } from "./parsers/nlpParser";
-import { injectHighlights } from "./highlighters/domHighlighter";
+import {
+  injectHighlights,
+  injectGlobalStyles,
+  clearHighlights,
+  rerenderOverlay,
+} from "./highlighters/domHighlighter";
 import { EmailClient } from "@/types";
 
 console.log("[MailLens] v2 loaded");
@@ -9,8 +14,11 @@ console.log("[MailLens] v2 loaded");
 let currentClient: EmailClient;
 let observer: MutationObserver | null = null;
 let lastProcessedText = "";
+let scrollRAF: number | null = null;
 
 function init() {
+  injectGlobalStyles();
+
   currentClient = detectEmailClient();
   const config = getClientConfig(currentClient);
 
@@ -21,19 +29,43 @@ function init() {
   }
 
   observer = new MutationObserver(() => {
-    const emailBody = document.querySelector(
-      config.bodySelector,
-    ) as HTMLElement;
+    const emailBody = findEmailBody();
     if (!emailBody) return;
 
     const currentText = emailBody.innerText?.slice(0, 200) || "";
-    if (currentText === lastProcessedText) return; // already processed
+    if (currentText === lastProcessedText) return;
     lastProcessedText = currentText;
 
     onEmailOpened(emailBody);
   });
 
   observer.observe(observerTarget, { childList: true, subtree: true });
+
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (scrollRAF) cancelAnimationFrame(scrollRAF);
+      scrollRAF = requestAnimationFrame(() => {
+        rerenderOverlay();
+      });
+    },
+    { passive: true },
+  );
+
+  const gmailScroller = document.querySelector(".Tm.aeJ") as HTMLElement;
+  if (gmailScroller) {
+    gmailScroller.addEventListener(
+      "scroll",
+      () => {
+        if (scrollRAF) cancelAnimationFrame(scrollRAF);
+        scrollRAF = requestAnimationFrame(() => {
+          rerenderOverlay();
+        });
+      },
+      { passive: true },
+    );
+  }
+
   console.log(`[MailLens] Watching ${currentClient}`);
 }
 
@@ -43,13 +75,9 @@ async function onEmailOpened(emailElement: HTMLElement) {
 
   console.log("[MailLens] Parsed email:", email.subject);
 
-  // Extract highlights with NLP
   const highlights = extractHighlights(email);
-
-  // Inject into DOM
   injectHighlights(emailElement, highlights);
 
-  // Notify sidebar
   chrome.runtime.sendMessage({
     type: "EMAIL_ANALYZED",
     payload: { email, highlights },

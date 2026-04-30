@@ -17,7 +17,7 @@ export default function Popup() {
           marginBottom: "12px",
         }}
       >
-        <span style={{ fontSize: "22px" }}>🔍</span>
+        <span style={{ fontSize: "22px" }}></span>
         <div>
           <div style={{ fontWeight: 700, color: "#a5b4fc" }}>MailLens</div>
           <div style={{ fontSize: "11px", color: "#475569" }}>
@@ -35,7 +35,7 @@ export default function Popup() {
           textAlign: "center",
         }}
       >
-        Open an email on Gmail, Outlook, or Yahoo to see highlights ✨
+        Open an email on Gmail, Outlook, or Yahoo to see highlights
       </div>
       <div
         style={{

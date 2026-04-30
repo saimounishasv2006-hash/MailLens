@@ -16,34 +16,37 @@ const DEFAULT_SETTINGS: MailLensSettings = {
   theme: "system",
 };
 
-// Initialize settings on install
 chrome.runtime.onInstalled.addListener(async () => {
   const existing = await chrome.storage.local.get("settings");
   if (!existing.settings) {
     await chrome.storage.local.set({ settings: DEFAULT_SETTINGS });
   }
-  console.log("[MailLens] Extension installed & ready");
 });
 
-// Open side panel when icon is clicked
 chrome.action.onClicked.addListener((tab) => {
-  if (tab.id) {
-    chrome.sidePanel.open({ tabId: tab.id });
-  }
+  chrome.windows.create({
+    url: chrome.runtime.getURL("src/sidebar/index.html"),
+    type: "popup",
+    width: 380,
+    height: 700,
+  });
 });
 
-// Message bridge between content script and popup/sidebar
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "EMAIL_ANALYZED") {
+    chrome.storage.local.set({ latestEmail: message.payload });
+  }
+
+  if (message.type === "GET_LATEST_EMAIL") {
+    chrome.storage.local.get("latestEmail").then((data) => {
+      sendResponse({ payload: data.latestEmail || null });
+    });
+    return true;
+  }
+
   if (message.type === "GET_SETTINGS") {
     chrome.storage.local.get("settings").then((data) => {
       sendResponse({ settings: data.settings ?? DEFAULT_SETTINGS });
-    });
-    return true; // keep channel open for async
-  }
-
-  if (message.type === "SAVE_SETTINGS") {
-    chrome.storage.local.set({ settings: message.payload }).then(() => {
-      sendResponse({ success: true });
     });
     return true;
   }

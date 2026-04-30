@@ -3,7 +3,6 @@ import compromiseDates from "compromise-dates";
 import compromiseNumbers from "compromise-numbers";
 import { Highlight, HighlightType, ParsedEmail } from "@/types";
 
-// Register plugins
 nlp.plugin(compromiseDates);
 nlp.plugin(compromiseNumbers);
 
@@ -29,9 +28,6 @@ const URGENT_KEYWORDS = [
   "important",
   "time-sensitive",
   "priority",
-  "by end of day",
-  "eod",
-  "eow",
 ];
 
 const ACTION_PATTERNS = [
@@ -42,23 +38,20 @@ const ACTION_PATTERNS = [
   /make sure\s+\w+/gi,
   /don't forget\s+\w+/gi,
   /remember to\s+\w+/gi,
-  /follow up\s*/gi,
+  /follow up/gi,
 ];
 
-function findMatches(
+function findWholeWordMatches(
   text: string,
-  pattern: RegExp,
+  term: string,
   type: HighlightType,
   emailId: string,
 ): Highlight[] {
   const results: Highlight[] = [];
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(?<![\\w])${escaped}(?![\\w])`, "gi");
   let match: RegExpExecArray | null;
-  const re = new RegExp(
-    pattern.source,
-    pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g",
-  );
   while ((match = re.exec(text)) !== null) {
-    if (match[0].trim().length < 2) continue;
     results.push({
       id: `${emailId}-${type}-${match.index}`,
       emailId,
@@ -67,9 +60,51 @@ function findMatches(
       startIndex: match.index,
       endIndex: match.index + match[0].length,
       color: HIGHLIGHT_COLORS[type],
+      tooltip: getTooltipLabel(type),
     });
   }
   return results;
+}
+
+function findPatternMatches(
+  text: string,
+  pattern: RegExp,
+  type: HighlightType,
+  emailId: string,
+): Highlight[] {
+  const results: Highlight[] = [];
+  const re = new RegExp(pattern.source, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const matched = match[0].trim();
+    if (matched.length < 3) continue;
+    if (match.index > 0 && /\w/.test(text[match.index - 1])) continue;
+    results.push({
+      id: `${emailId}-${type}-${match.index}`,
+      emailId,
+      type,
+      text: matched,
+      startIndex: match.index,
+      endIndex: match.index + matched.length,
+      color: HIGHLIGHT_COLORS[type],
+      tooltip: getTooltipLabel(type),
+    });
+  }
+  return results;
+}
+
+function getTooltipLabel(type: HighlightType): string {
+  const map: Record<HighlightType, string> = {
+    action_item: "Action Item",
+    deadline: "Date / Deadline",
+    person: "Person Mentioned",
+    amount: "Amount / Money",
+    link: "Link",
+    phone: "Phone Number",
+    question: "Question",
+    urgent: "Urgent",
+  };
+  return map[type];
 }
 
 export function extractHighlights(email: ParsedEmail): Highlight[] {
@@ -77,32 +112,20 @@ export function extractHighlights(email: ParsedEmail): Highlight[] {
   const doc = nlp(body) as any;
   const allHighlights: Highlight[] = [];
 
-  // 👤 People
   try {
     doc.people().forEach((person: any) => {
-      const text = person.text();
-      const idx = body.indexOf(text);
-      if (idx !== -1 && text.length > 2) {
-        allHighlights.push({
-          id: `${id}-person-${idx}`,
-          emailId: id,
-          type: "person",
-          text,
-          startIndex: idx,
-          endIndex: idx + text.length,
-          color: HIGHLIGHT_COLORS.person,
-          tooltip: "Person mentioned",
-        });
-      }
+      const text = person.text().trim();
+      if (text.length < 3) return;
+      allHighlights.push(...findWholeWordMatches(body, text, "person", id));
     });
   } catch (_) {}
 
-  // 📅 Dates — using plugin
   try {
     doc.dates().forEach((date: any) => {
-      const text = date.text();
+      const text = date.text().trim();
+      if (text.length < 3) return;
       const idx = body.indexOf(text);
-      if (idx !== -1 && text.length > 1) {
+      if (idx !== -1) {
         allHighlights.push({
           id: `${id}-deadline-${idx}`,
           emailId: id,
@@ -117,10 +140,10 @@ export function extractHighlights(email: ParsedEmail): Highlight[] {
     });
   } catch (_) {}
 
-  // 💰 Money — using plugin
   try {
     doc.money().forEach((m: any) => {
-      const text = m.text();
+      const text = m.text().trim();
+      if (!text) return;
       const idx = body.indexOf(text);
       if (idx !== -1) {
         allHighlights.push({
@@ -137,51 +160,42 @@ export function extractHighlights(email: ParsedEmail): Highlight[] {
     });
   } catch (_) {}
 
-  // 💰 Fallback regex for money (catches $100, ₹500, €200 etc.)
   allHighlights.push(
-    ...findMatches(body, /[$₹€£¥]\s?\d[\d,.]*/g, "amount", id),
+    ...findPatternMatches(body, /[$₹€£¥]\d[\d,.]+/g, "amount", id),
   );
 
-  // ❓ Questions
   try {
-    doc
-      .sentences()
-      .filter((s: any) => s.has("?"))
-      .forEach((s: any) => {
-        const text = s.text().trim();
-        const idx = body.indexOf(text);
-        if (idx !== -1 && text.length > 5) {
-          allHighlights.push({
-            id: `${id}-question-${idx}`,
-            emailId: id,
-            type: "question",
-            text,
-            startIndex: idx,
-            endIndex: idx + text.length,
-            color: HIGHLIGHT_COLORS.question,
-            tooltip: "Question",
-          });
-        }
-      });
+    doc.sentences().forEach((s: any) => {
+      const text = s.text().trim();
+      if (!text.includes("?") || text.length < 10) return;
+      const idx = body.indexOf(text);
+      if (idx !== -1) {
+        allHighlights.push({
+          id: `${id}-question-${idx}`,
+          emailId: id,
+          type: "question",
+          text,
+          startIndex: idx,
+          endIndex: idx + text.length,
+          color: HIGHLIGHT_COLORS.question,
+          tooltip: "Question",
+        });
+      }
+    });
   } catch (_) {}
 
-  // 🔴 Urgent keywords
   URGENT_KEYWORDS.forEach((kw) => {
-    const re = new RegExp(`\\b${kw}\\b`, "gi");
-    allHighlights.push(...findMatches(body, re, "urgent", id));
+    allHighlights.push(...findWholeWordMatches(body, kw, "urgent", id));
   });
 
-  // ✅ Action items
   ACTION_PATTERNS.forEach((pattern) => {
-    allHighlights.push(...findMatches(body, pattern, "action_item", id));
+    allHighlights.push(...findPatternMatches(body, pattern, "action_item", id));
   });
 
-  // 📞 Phone numbers
   allHighlights.push(
-    ...findMatches(body, /(\+?\d[\d\s\-().]{7,}\d)/g, "phone", id),
+    ...findPatternMatches(body, /\+?\d[\d\s\-().]{8,}\d/g, "phone", id),
   );
 
-  // Sort and deduplicate
   return deduplicateHighlights(
     allHighlights.sort((a, b) => a.startIndex - b.startIndex),
   );
@@ -191,7 +205,7 @@ function deduplicateHighlights(highlights: Highlight[]): Highlight[] {
   const result: Highlight[] = [];
   let lastEnd = -1;
   for (const h of highlights) {
-    if (h.startIndex >= lastEnd) {
+    if (h.startIndex >= lastEnd && h.text.trim().length > 0) {
       result.push(h);
       lastEnd = h.endIndex;
     }

@@ -12,10 +12,10 @@ interface ClientConfig {
 export const CLIENT_CONFIGS: Record<EmailClient, ClientConfig> = {
   gmail: {
     name: "gmail",
-    emailContainerSelector: ".a3s.aiL",
+    emailContainerSelector: ".tVu25",
     subjectSelector: "h2.hP",
     senderSelector: ".gD",
-    bodySelector: ".a3s.aiL",
+    bodySelector: ".tVu25",
     observerTarget: ".AO",
   },
   outlook: {

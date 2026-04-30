@@ -1,13 +1,28 @@
 import { Highlight } from "@/types";
 
-const TOOLTIP_ID = "maillens-tooltip";
+const OVERLAY_ID = "maillens-overlay-container";
 
-function getOrCreateTooltip(): HTMLDivElement {
-  let tooltip = document.getElementById(TOOLTIP_ID) as HTMLDivElement;
-  if (!tooltip) {
-    tooltip = document.createElement("div");
-    tooltip.id = TOOLTIP_ID;
-    tooltip.style.cssText = `
+export function injectGlobalStyles(): void {
+  if (document.getElementById("maillens-styles")) return;
+  const style = document.createElement("style");
+  style.id = "maillens-styles";
+  style.textContent = `
+    #maillens-overlay-container {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      pointer-events: none;
+      z-index: 9999;
+    }
+    .maillens-hl {
+      position: fixed;
+      pointer-events: auto;
+      cursor: pointer;
+      border-radius: 3px;
+      opacity: 0.45;
+    }
+    .maillens-hl:hover { opacity: 0.75; }
+    #maillens-tooltip {
       position: fixed;
       z-index: 99999;
       background: #1e1b4b;
@@ -17,117 +32,154 @@ function getOrCreateTooltip(): HTMLDivElement {
       font-size: 12px;
       font-family: sans-serif;
       pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.15s;
       white-space: nowrap;
-    `;
-    document.body.appendChild(tooltip);
-  }
-  return tooltip;
+      transition: opacity 0.15s;
+      opacity: 0;
+    }
+  `;
+  document.head.appendChild(style);
 }
+
+function getOrCreateTooltip(): HTMLDivElement {
+  let t = document.getElementById("maillens-tooltip") as HTMLDivElement;
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "maillens-tooltip";
+    document.body.appendChild(t);
+  }
+  return t;
+}
+
+function getHighlightColor(type: string): string {
+  const map: Record<string, string> = {
+    action_item: "#6366f1",
+    deadline: "#ef4444",
+    person: "#10b981",
+    amount: "#f59e0b",
+    link: "#3b82f6",
+    phone: "#8b5cf6",
+    question: "#ec4899",
+    urgent: "#ef4444",
+  };
+  return map[type] || "#94a3b8";
+}
+
+function getTypeLabel(type: string): string {
+  const map: Record<string, string> = {
+    action_item: "Action Item",
+    deadline: "Deadline",
+    person: "Person",
+    amount: "Amount",
+    link: "Link",
+    phone: "Phone",
+    question: "Question",
+    urgent: "Urgent",
+  };
+  return map[type] || type;
+}
+
+function findTextRange(
+  container: HTMLElement,
+  searchText: string,
+): Range | null {
+  if (!searchText.trim()) return null;
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  let accumulated = "";
+  const nodes: { node: Text; start: number }[] = [];
+
+  let node: Text | null;
+  while ((node = walker.nextNode() as Text)) {
+    nodes.push({ node, start: accumulated.length });
+    accumulated += node.textContent || "";
+  }
+
+  const idx = accumulated.indexOf(searchText);
+  if (idx === -1) return null;
+
+  const end = idx + searchText.length;
+  const range = document.createRange();
+  let startSet = false;
+
+  for (const { node, start } of nodes) {
+    const nodeEnd = start + (node.textContent?.length || 0);
+    if (!startSet && idx >= start && idx < nodeEnd) {
+      range.setStart(node, idx - start);
+      startSet = true;
+    }
+    if (startSet && end > start && end <= nodeEnd) {
+      range.setEnd(node, end - start);
+      return range;
+    }
+  }
+  return null;
+}
+
+let currentHighlights: Highlight[] = [];
+let currentContainer: HTMLElement | null = null;
 
 export function injectHighlights(
   container: HTMLElement,
   highlights: Highlight[],
 ): void {
-  clearHighlights(container);
+  currentHighlights = highlights;
+  currentContainer = container;
+  renderOverlay();
+}
 
-  if (highlights.length === 0) return;
+function renderOverlay(): void {
+  document.getElementById(OVERLAY_ID)?.remove();
+
+  if (currentHighlights.length === 0 || !currentContainer) return;
 
   const tooltip = getOrCreateTooltip();
 
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    null,
-  );
+  const overlayContainer = document.createElement("div");
+  overlayContainer.id = OVERLAY_ID;
+  document.body.appendChild(overlayContainer);
 
-  const textNodes: { node: Text; start: number }[] = [];
-  let offset = 0;
+  let injectedCount = 0;
 
-  let node: Text | null;
-  while ((node = walker.nextNode() as Text)) {
-    textNodes.push({ node, start: offset });
-    offset += node.textContent?.length ?? 0;
-  }
+  for (const highlight of currentHighlights) {
+    const range = findTextRange(currentContainer, highlight.text);
+    if (!range) continue;
 
-  for (const highlight of [...highlights].reverse()) {
-    for (const { node, start } of [...textNodes].reverse()) {
-      const nodeText = node.textContent || "";
-      const nodeEnd = start + nodeText.length;
+    const rects = Array.from(range.getClientRects());
 
-      if (highlight.startIndex >= start && highlight.endIndex <= nodeEnd) {
-        const localStart = highlight.startIndex - start;
-        const localEnd = highlight.endIndex - start;
+    for (const rect of rects) {
+      if (rect.width < 1 || rect.height < 1) continue;
 
-        const before = nodeText.slice(0, localStart);
-        const match = nodeText.slice(localStart, localEnd);
-        const after = nodeText.slice(localEnd);
+      const hl = document.createElement("div");
+      hl.className = "maillens-hl";
+      hl.style.left = `${rect.left}px`;
+      hl.style.top = `${rect.top}px`;
+      hl.style.width = `${rect.width}px`;
+      hl.style.height = `${rect.height}px`;
+      hl.style.background = getHighlightColor(highlight.type);
+      hl.style.borderBottom = `2px solid ${getHighlightColor(highlight.type)}`;
 
-        const span = document.createElement("mark");
-        span.setAttribute("data-maillens-highlight", highlight.type);
-        span.setAttribute("data-maillens-id", highlight.id);
-        span.style.cssText = `
-  background: ${highlight.color} !important;
-  border-radius: 3px !important;
-  padding: 0 2px !important;
-  cursor: pointer !important;
-  display: inline !important;
-  color: inherit !important;
-  font-size: inherit !important;
-  font-family: inherit !important;
-  -webkit-text-fill-color: inherit !important;
-  border-bottom: 2.5px solid ${highlight.color.replace(/[\d.]+\)$/, "1)")} !important;
-  text-decoration: none !important;
-  position: relative !important;
-  z-index: 9999 !important;
-`;
-        span.textContent = match;
+      hl.addEventListener("mouseenter", (e) => {
+        tooltip.textContent = getTypeLabel(highlight.type);
+        tooltip.style.opacity = "1";
+        tooltip.style.left = `${(e as MouseEvent).clientX + 10}px`;
+        tooltip.style.top = `${(e as MouseEvent).clientY - 28}px`;
+      });
+      hl.addEventListener("mouseleave", () => {
+        tooltip.style.opacity = "0";
+      });
 
-        span.addEventListener("mouseenter", (e) => {
-          if (highlight.tooltip) {
-            tooltip.textContent = `${getTypeEmoji(highlight.type)} ${highlight.tooltip}`;
-            tooltip.style.opacity = "1";
-            tooltip.style.left = `${(e as MouseEvent).clientX + 10}px`;
-            tooltip.style.top = `${(e as MouseEvent).clientY - 28}px`;
-          }
-        });
-        span.addEventListener("mouseleave", () => {
-          tooltip.style.opacity = "0";
-        });
-
-        const fragment = document.createDocumentFragment();
-        if (before) fragment.appendChild(document.createTextNode(before));
-        fragment.appendChild(span);
-        if (after) fragment.appendChild(document.createTextNode(after));
-
-        node.parentNode?.replaceChild(fragment, node);
-        break;
-      }
+      overlayContainer.appendChild(hl);
+      injectedCount++;
     }
   }
 }
 
-export function clearHighlights(container: HTMLElement): void {
-  container.querySelectorAll("[data-maillens-highlight]").forEach((el) => {
-    const parent = el.parentNode;
-    if (parent) {
-      parent.replaceChild(document.createTextNode(el.textContent || ""), el);
-      parent.normalize();
-    }
-  });
+export function clearHighlights(_container: HTMLElement): void {
+  document.getElementById(OVERLAY_ID)?.remove();
+  currentHighlights = [];
+  currentContainer = null;
 }
 
-function getTypeEmoji(type: string): string {
-  const map: Record<string, string> = {
-    action_item: "✅",
-    deadline: "📅",
-    person: "👤",
-    amount: "💰",
-    link: "🔗",
-    phone: "📞",
-    question: "❓",
-    urgent: "🔴",
-  };
-  return map[type] || "•";
+export function rerenderOverlay(): void {
+  renderOverlay();
 }

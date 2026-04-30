@@ -7,19 +7,15 @@ import {
 } from "@/types";
 
 interface MailStore {
-  // Current email
   currentEmail: ParsedEmail | null;
   highlights: Highlight[];
   insight: EmailInsight | null;
 
-  // UI state
   sidebarOpen: boolean;
   isAnalyzing: boolean;
 
-  // Settings
   settings: MailLensSettings;
 
-  // Actions
   setCurrentEmail: (email: ParsedEmail) => void;
   setHighlights: (highlights: Highlight[]) => void;
   setInsight: (insight: EmailInsight) => void;

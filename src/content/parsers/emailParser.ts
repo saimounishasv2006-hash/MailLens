@@ -1,5 +1,4 @@
 import { ParsedEmail, EmailClient } from "@/types";
-import { getClientConfig } from "../detectors/clientDetector";
 
 function generateId(): string {
   return `email-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -7,27 +6,49 @@ function generateId(): string {
 
 function cleanText(text: string): string {
   return text
-    .replace(/\u200B/g, "") // zero-width spaces
+    .replace(/\u200B/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
+export function findEmailBody(): HTMLElement | null {
+  const selectors = [
+    ".tVu25",
+    ".a3s.aiL",
+    ".a3s",
+    ".ii.gt div",
+    "[data-message-id]",
+  ];
+
+  for (const sel of selectors) {
+    const el = document.querySelector(sel) as HTMLElement;
+    if (el && el.innerText?.length > 50) return el;
+  }
+
+  const divs = Array.from(document.querySelectorAll("div")) as HTMLElement[];
+  return (
+    divs
+      .filter((d) => d.children.length < 10 && (d.innerText?.length || 0) > 200)
+      .sort(
+        (a, b) => (b.innerText?.length || 0) - (a.innerText?.length || 0),
+      )[0] || null
+  );
+}
+
 export function parseEmail(client: EmailClient): ParsedEmail | null {
-  const config = getClientConfig(client);
-
-  const bodyEl = document.querySelector(config.bodySelector);
-  const subjectEl = document.querySelector(config.subjectSelector);
-  const senderEl = document.querySelector(config.senderSelector);
-
+  const bodyEl = findEmailBody();
   if (!bodyEl) return null;
 
-  const body = cleanText((bodyEl as HTMLElement).innerText || "");
+  const body = cleanText(bodyEl.innerText || "");
+  if (body.length < 20) return null;
+
+  const subjectEl = document.querySelector("h2.hP") as HTMLElement;
   const subject = cleanText(
-    (subjectEl as HTMLElement)?.innerText || "No Subject",
+    subjectEl?.innerText || document.title || "No Subject",
   );
 
-  // Parse sender name + email
-  const senderRaw = cleanText((senderEl as HTMLElement)?.innerText || "");
+  const senderEl = document.querySelector(".gD") as HTMLElement;
+  const senderRaw = cleanText(senderEl?.innerText || "");
   const emailMatch = senderRaw.match(/[\w.-]+@[\w.-]+\.\w+/);
   const senderEmail = emailMatch ? emailMatch[0] : "";
   const sender =

@@ -6,7 +6,7 @@ export default defineManifest({
   version: "1.0.0",
   description:
     "AI-powered email highlights, summaries, and insights — 100% local",
-  permissions: ["storage", "activeTab", "scripting", "sidePanel"],
+  permissions: ["storage", "activeTab", "scripting"],
   host_permissions: [
     "https://mail.google.com/*",
     "https://outlook.live.com/*",
@@ -35,12 +35,7 @@ export default defineManifest({
       run_at: "document_idle",
     },
   ],
-  action: {
-    default_popup: "src/popup/index.html",
-  },
-  side_panel: {
-    default_path: "src/sidebar/index.html",
-  },
+  action: {},
   web_accessible_resources: [
     {
       resources: ["src/sidebar/index.html"],

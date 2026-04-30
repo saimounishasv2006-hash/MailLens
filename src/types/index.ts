@@ -48,7 +48,7 @@ export interface EmailInsight {
     organizations: string[];
     amounts: string[];
   };
-  priorityScore: number; // 0-100
+  priorityScore: number;
 }
 
 export interface MailLensSettings {

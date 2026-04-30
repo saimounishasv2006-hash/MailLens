@@ -1,12 +1,59 @@
-[data-maillens-highlight] {
+mark.maillens {
   border-radius: 3px !important;
+  padding: 1px 2px !important;
   cursor: pointer !important;
-  transition: opacity 0.15s ease !important;
   display: inline !important;
-  visibility: visible !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  font-family: inherit !important;
+  line-height: inherit !important;
+  -webkit-text-fill-color: inherit !important;
+  text-decoration: none !important;
 }
 
-mark[data-maillens-highlight] {
-  background-color: inherit !important;
-  color: inherit !important;
+mark.maillens-action_item {
+  background: rgba(99, 102, 241, 0.4) !important;
+  outline: 1.5px solid #6366f1 !important;
+}
+mark.maillens-deadline {
+  background: rgba(239, 68, 68, 0.4) !important;
+  outline: 1.5px solid #ef4444 !important;
+}
+mark.maillens-person {
+  background: rgba(16, 185, 129, 0.4) !important;
+  outline: 1.5px solid #10b981 !important;
+}
+mark.maillens-amount {
+  background: rgba(245, 158, 11, 0.4) !important;
+  outline: 1.5px solid #f59e0b !important;
+}
+mark.maillens-phone {
+  background: rgba(139, 92, 246, 0.4) !important;
+  outline: 1.5px solid #8b5cf6 !important;
+}
+mark.maillens-question {
+  background: rgba(236, 72, 153, 0.4) !important;
+  outline: 1.5px solid #ec4899 !important;
+}
+mark.maillens-urgent {
+  background: rgba(239, 68, 68, 0.55) !important;
+  outline: 1.5px solid #ef4444 !important;
+}
+mark.maillens-link {
+  background: rgba(59, 130, 246, 0.4) !important;
+  outline: 1.5px solid #3b82f6 !important;
+}
+
+#maillens-tooltip {
+  position: fixed;
+  z-index: 99999;
+  background: #1e1b4b;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 0.15s;
 }
