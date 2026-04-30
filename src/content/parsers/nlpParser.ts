@@ -1,15 +1,21 @@
 import nlp from "compromise";
+import compromiseDates from "compromise-dates";
+import compromiseNumbers from "compromise-numbers";
 import { Highlight, HighlightType, ParsedEmail } from "@/types";
 
+// Register plugins
+nlp.plugin(compromiseDates);
+nlp.plugin(compromiseNumbers);
+
 const HIGHLIGHT_COLORS: Record<HighlightType, string> = {
-  action_item: "rgba(99, 102, 241, 0.25)", // indigo
-  deadline: "rgba(239, 68, 68, 0.25)", // red
-  person: "rgba(16, 185, 129, 0.25)", // green
-  amount: "rgba(245, 158, 11, 0.25)", // amber
-  link: "rgba(59, 130, 246, 0.25)", // blue
-  phone: "rgba(139, 92, 246, 0.25)", // purple
-  question: "rgba(236, 72, 153, 0.25)", // pink
-  urgent: "rgba(239, 68, 68, 0.4)", // red (stronger)
+  action_item: "rgba(99, 102, 241, 0.25)",
+  deadline: "rgba(239, 68, 68, 0.25)",
+  person: "rgba(16, 185, 129, 0.25)",
+  amount: "rgba(245, 158, 11, 0.25)",
+  link: "rgba(59, 130, 246, 0.25)",
+  phone: "rgba(139, 92, 246, 0.25)",
+  question: "rgba(236, 72, 153, 0.25)",
+  urgent: "rgba(239, 68, 68, 0.4)",
 };
 
 const URGENT_KEYWORDS = [
@@ -68,83 +74,96 @@ function findMatches(
 
 export function extractHighlights(email: ParsedEmail): Highlight[] {
   const { body, id } = email;
-  const doc = nlp(body);
+  const doc = nlp(body) as any;
   const allHighlights: Highlight[] = [];
 
   // 👤 People
-  doc.people().forEach((person) => {
-    const text = person.text();
-    const idx = body.indexOf(text);
-    if (idx !== -1 && text.length > 2) {
-      allHighlights.push({
-        id: `${id}-person-${idx}`,
-        emailId: id,
-        type: "person",
-        text,
-        startIndex: idx,
-        endIndex: idx + text.length,
-        color: HIGHLIGHT_COLORS.person,
-        tooltip: "Person mentioned",
-      });
-    }
-  });
-
-  // 📅 Dates / Deadlines
-  doc.dates().forEach((date) => {
-    const text = date.text();
-    const idx = body.indexOf(text);
-    if (idx !== -1) {
-      allHighlights.push({
-        id: `${id}-deadline-${idx}`,
-        emailId: id,
-        type: "deadline",
-        text,
-        startIndex: idx,
-        endIndex: idx + text.length,
-        color: HIGHLIGHT_COLORS.deadline,
-        tooltip: "Date / Deadline",
-      });
-    }
-  });
-
-  // 💰 Money amounts
-  doc.money().forEach((m) => {
-    const text = m.text();
-    const idx = body.indexOf(text);
-    if (idx !== -1) {
-      allHighlights.push({
-        id: `${id}-amount-${idx}`,
-        emailId: id,
-        type: "amount",
-        text,
-        startIndex: idx,
-        endIndex: idx + text.length,
-        color: HIGHLIGHT_COLORS.amount,
-        tooltip: "Amount / Money",
-      });
-    }
-  });
-
-  // ❓ Questions
-  doc
-    .sentences()
-    .filter((s) => s.has("?"))
-    .forEach((s) => {
-      const text = s.text();
+  try {
+    doc.people().forEach((person: any) => {
+      const text = person.text();
       const idx = body.indexOf(text);
-      if (idx !== -1) {
+      if (idx !== -1 && text.length > 2) {
         allHighlights.push({
-          id: `${id}-question-${idx}`,
+          id: `${id}-person-${idx}`,
           emailId: id,
-          type: "question",
+          type: "person",
           text,
           startIndex: idx,
           endIndex: idx + text.length,
-          color: HIGHLIGHT_COLORS.question,
-          tooltip: "Question",
+          color: HIGHLIGHT_COLORS.person,
+          tooltip: "Person mentioned",
         });
       }
     });
+  } catch (_) {}
+
+  // 📅 Dates — using plugin
+  try {
+    doc.dates().forEach((date: any) => {
+      const text = date.text();
+      const idx = body.indexOf(text);
+      if (idx !== -1 && text.length > 1) {
+        allHighlights.push({
+          id: `${id}-deadline-${idx}`,
+          emailId: id,
+          type: "deadline",
+          text,
+          startIndex: idx,
+          endIndex: idx + text.length,
+          color: HIGHLIGHT_COLORS.deadline,
+          tooltip: "Date / Deadline",
+        });
+      }
+    });
+  } catch (_) {}
+
+  // 💰 Money — using plugin
+  try {
+    doc.money().forEach((m: any) => {
+      const text = m.text();
+      const idx = body.indexOf(text);
+      if (idx !== -1) {
+        allHighlights.push({
+          id: `${id}-amount-${idx}`,
+          emailId: id,
+          type: "amount",
+          text,
+          startIndex: idx,
+          endIndex: idx + text.length,
+          color: HIGHLIGHT_COLORS.amount,
+          tooltip: "Amount / Money",
+        });
+      }
+    });
+  } catch (_) {}
+
+  // 💰 Fallback regex for money (catches $100, ₹500, €200 etc.)
+  allHighlights.push(
+    ...findMatches(body, /[$₹€£¥]\s?\d[\d,.]*/g, "amount", id),
+  );
+
+  // ❓ Questions
+  try {
+    doc
+      .sentences()
+      .filter((s: any) => s.has("?"))
+      .forEach((s: any) => {
+        const text = s.text().trim();
+        const idx = body.indexOf(text);
+        if (idx !== -1 && text.length > 5) {
+          allHighlights.push({
+            id: `${id}-question-${idx}`,
+            emailId: id,
+            type: "question",
+            text,
+            startIndex: idx,
+            endIndex: idx + text.length,
+            color: HIGHLIGHT_COLORS.question,
+            tooltip: "Question",
+          });
+        }
+      });
+  } catch (_) {}
 
   // 🔴 Urgent keywords
   URGENT_KEYWORDS.forEach((kw) => {
@@ -162,7 +181,7 @@ export function extractHighlights(email: ParsedEmail): Highlight[] {
     ...findMatches(body, /(\+?\d[\d\s\-().]{7,}\d)/g, "phone", id),
   );
 
-  // Sort by position, remove overlaps
+  // Sort and deduplicate
   return deduplicateHighlights(
     allHighlights.sort((a, b) => a.startIndex - b.startIndex),
   );
@@ -181,21 +200,10 @@ function deduplicateHighlights(highlights: Highlight[]): Highlight[] {
 }
 
 export function extractActionItems(body: string): string[] {
-  const doc = nlp(body);
   const items: string[] = [];
-
   ACTION_PATTERNS.forEach((pattern) => {
     const matches = body.match(new RegExp(pattern.source, "gi")) || [];
     items.push(...matches.map((m) => m.trim()));
   });
-
-  // Also grab imperative sentences
-  doc.sentences().forEach((s) => {
-    const text = s.text().trim();
-    if (text.match(/^(please|could|can|need|make sure|don't|remember)/i)) {
-      if (!items.includes(text)) items.push(text);
-    }
-  });
-
   return [...new Set(items)].slice(0, 10);
 }

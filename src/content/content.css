@@ -1,10 +1,12 @@
-/* MailLens content styles — Phase 2 will populate this */
 [data-maillens-highlight] {
-  border-radius: 2px;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
+  border-radius: 3px !important;
+  cursor: pointer !important;
+  transition: opacity 0.15s ease !important;
+  display: inline !important;
+  visibility: visible !important;
 }
 
-[data-maillens-highlight]:hover {
-  opacity: 0.8;
+mark[data-maillens-highlight] {
+  background-color: inherit !important;
+  color: inherit !important;
 }

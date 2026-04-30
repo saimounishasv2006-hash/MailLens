@@ -30,15 +30,12 @@ export function injectHighlights(
   container: HTMLElement,
   highlights: Highlight[],
 ): void {
-  // Remove previous highlights
   clearHighlights(container);
 
   if (highlights.length === 0) return;
 
   const tooltip = getOrCreateTooltip();
-  const fullText = container.innerText;
 
-  // Walk text nodes and inject spans
   const walker = document.createTreeWalker(
     container,
     NodeFilter.SHOW_TEXT,
@@ -54,7 +51,6 @@ export function injectHighlights(
     offset += node.textContent?.length ?? 0;
   }
 
-  // Apply highlights in reverse order to preserve indices
   for (const highlight of [...highlights].reverse()) {
     for (const { node, start } of [...textNodes].reverse()) {
       const nodeText = node.textContent || "";
@@ -72,14 +68,22 @@ export function injectHighlights(
         span.setAttribute("data-maillens-highlight", highlight.type);
         span.setAttribute("data-maillens-id", highlight.id);
         span.style.cssText = `
-          background: ${highlight.color};
-          border-radius: 3px;
-          padding: 0 1px;
-          cursor: pointer;
-        `;
+  background: ${highlight.color} !important;
+  border-radius: 3px !important;
+  padding: 0 2px !important;
+  cursor: pointer !important;
+  display: inline !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-family: inherit !important;
+  -webkit-text-fill-color: inherit !important;
+  border-bottom: 2.5px solid ${highlight.color.replace(/[\d.]+\)$/, "1)")} !important;
+  text-decoration: none !important;
+  position: relative !important;
+  z-index: 9999 !important;
+`;
         span.textContent = match;
 
-        // Tooltip events
         span.addEventListener("mouseenter", (e) => {
           if (highlight.tooltip) {
             tooltip.textContent = `${getTypeEmoji(highlight.type)} ${highlight.tooltip}`;

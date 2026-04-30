@@ -14,7 +14,7 @@ export default defineManifest({
     "https://mail.yahoo.com/*",
     "https://mail.proton.me/*",
     "https://app.fastmail.com/*",
-    "http://localhost:11434/*", // 👈 add this
+    "http://localhost:11434/*",
   ],
   background: {
     service_worker: "src/background/index.ts",
@@ -37,21 +37,9 @@ export default defineManifest({
   ],
   action: {
     default_popup: "src/popup/index.html",
-    default_icon: {
-      "16": "public/icons/icon16.png",
-      "32": "public/icons/icon32.png",
-      "48": "public/icons/icon48.png",
-      "128": "public/icons/icon128.png",
-    },
   },
   side_panel: {
     default_path: "src/sidebar/index.html",
-  },
-  icons: {
-    "16": "public/icons/icon16.png",
-    "32": "public/icons/icon32.png",
-    "48": "public/icons/icon48.png",
-    "128": "public/icons/icon128.png",
   },
   web_accessible_resources: [
     {
